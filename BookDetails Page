@@ -1,0 +1,104 @@
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import api from '../services/api';
+import ReviewList from '../components/ReviewList';
+import ReviewForm from '../components/ReviewForm';
+import Rating from '../components/Rating';
+
+function BookDetails() {
+  const { id } = useParams();
+  const [book, setBook] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchBookDetails = async () => {
+      try {
+        const response = await api.get(`/books/${id}`);
+        setBook(response.data.book);
+        setReviews(response.data.reviews);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchBookDetails();
+  }, [id]);
+
+  const handleReviewSubmit = async (reviewData) => {
+    try {
+      const response = await api.post(`/reviews`, {
+        book: id,
+        ...reviewData
+      });
+      
+      setReviews([response.data, ...reviews]);
+      
+      // Update book rating
+      const updatedBook = { ...book };
+      const totalRatings = reviews.reduce((sum, r) => sum + r.rating, 0) + reviewData.rating;
+      updatedBook.averageRating = totalRatings / (reviews.length + 1);
+      setBook(updatedBook);
+      
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.response?.data?.error || err.message };
+    }
+  };
+
+  if (loading) return <div className="text-center py-8">Loading...</div>;
+  if (error) return <div className="text-center py-8 text-red-500">{error}</div>;
+  if (!book) return <div className="text-center py-8">Book not found</div>;
+
+  return (
+    <div>
+      <div className="flex flex-col md:flex-row gap-8 mb-8">
+        <div className="md:w-1/3">
+          <img 
+            src={book.coverImage} 
+            alt={book.title} 
+            className="w-full rounded-lg shadow-md"
+          />
+        </div>
+        <div className="md:w-2/3">
+          <h1 className="text-3xl font-bold mb-2">{book.title}</h1>
+          <h2 className="text-xl text-gray-600 mb-4">by {book.author}</h2>
+          
+          <div className="flex items-center mb-4">
+            <Rating value={book.averageRating} />
+            <span className="ml-2 text-gray-700">
+              {book.averageRating.toFixed(1)} ({reviews.length} reviews)
+            </span>
+          </div>
+          
+          <div className="mb-4">
+            <span className="font-semibold">Published:</span> {book.publishedYear}
+          </div>
+          
+          <div className="mb-4">
+            <span className="font-semibold">Genres:</span> {book.genre.join(', ')}
+          </div>
+          
+          <p className="text-gray-700">{book.description}</p>
+        </div>
+      </div>
+      
+      <div className="mt-12">
+        <h2 className="text-2xl font-bold mb-6">Reviews</h2>
+        
+        <ReviewForm onSubmit={handleReviewSubmit} />
+        
+        {reviews.length > 0 ? (
+          <ReviewList reviews={reviews} />
+        ) : (
+          <p className="text-gray-500">No reviews yet. Be the first to review!</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default BookDetails;
